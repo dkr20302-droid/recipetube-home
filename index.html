@@ -1,0 +1,715 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecipeTube</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="startupOverlay" class="startup-overlay hidden" hidden>
+    <div class="startup-card">
+      <div class="loader-ring"></div>
+      <h2>RecipeTube</h2>
+      <p id="startupText">Connecting to server...</p>
+    </div>
+  </div>
+
+  <div id="composerModal" class="modal hidden">
+    <div class="modal-card card">
+      <div class="modal-head">
+        <h3>Create Recipe Post</h3>
+        <button id="closeComposerBtn" type="button" class="ghost-btn">Close</button>
+      </div>
+      <form id="recipeForm">
+        <input type="text" id="recipeTitle" placeholder="Recipe title" required />
+        <input type="text" id="recipeTags" list="tagSuggestions" placeholder="Tags (comma separated: pasta, vegan, quick)" required />
+        <datalist id="tagSuggestions"></datalist>
+        <textarea id="recipeDescription" rows="3" placeholder="Short description" required></textarea>
+
+        <div class="list-editor">
+          <div class="list-editor-head">
+            <strong>Ingredients</strong>
+            <button id="addIngredientBtn" type="button" class="ghost-btn small-btn" title="Add ingredient" aria-label="Add ingredient">+</button>
+          </div>
+          <div id="ingredientsList" class="list-editor-list"></div>
+        </div>
+
+        <div class="list-editor">
+          <div class="list-editor-head">
+            <strong>Method</strong>
+            <button id="addStepBtn" type="button" class="ghost-btn small-btn" title="Add step" aria-label="Add step">+</button>
+          </div>
+          <div id="methodList" class="list-editor-list"></div>
+        </div>
+        <select id="recipeMediaType" required>
+          <option value="">Choose media type</option>
+          <option value="photos">Photo process (multiple images)</option>
+          <option value="video">Video</option>
+          <option value="both">Photos + Video</option>
+        </select>
+
+        <div id="photosGroup" class="hidden">
+          <label for="recipePhotos">Upload process photos</label>
+          <input type="file" id="recipePhotos" accept="image/*" multiple />
+        </div>
+
+        <div id="videoGroup" class="hidden">
+          <label for="recipeVideo">Upload a video file</label>
+          <input type="file" id="recipeVideo" accept="video/*" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancelComposerBtn" type="button" class="ghost-btn">Cancel</button>
+          <button type="submit">Post Recipe</button>
+        </div>
+      </form>
+      <p id="recipeMessage" class="message"></p>
+    </div>
+  </div>
+
+  <div id="mediaViewerModal" class="modal hidden" hidden>
+    <div class="modal-card card media-viewer-card">
+      <div class="modal-head">
+        <div>
+          <h3 id="mediaViewerTitle">Media</h3>
+          <p id="mediaViewerMeta" class="meta"></p>
+        </div>
+        <button id="closeMediaViewerBtn" type="button" class="ghost-btn">Close</button>
+      </div>
+      <div id="mediaViewerContent" class="media-viewer-content"></div>
+      <div class="media-viewer-actions">
+        <button id="mediaPrevBtn" type="button" class="ghost-btn">Prev</button>
+        <button id="mediaNextBtn" type="button" class="ghost-btn">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="avatarModal" class="modal hidden" hidden>
+    <div class="modal-card card" style="width:min(760px,94vw);">
+      <div class="modal-head">
+        <h3>Choose profile picture</h3>
+        <button id="closeAvatarModalBtn" type="button" class="ghost-btn">Close</button>
+      </div>
+      <div class="avatar-modal-body">
+        <button id="avatarUploadBtn" type="button" class="btn" style="width:100%;">+ Upload photo</button>
+        <input id="avatarUploadInput" type="file" accept="image/*" hidden />
+        <p class="meta" style="margin:12px 0 8px;">Current</p>
+        <div class="avatar-modal-grid">
+          <button id="useCurrentAvatarBtn" type="button" class="avatar-tile">
+            <img id="avatarModalCurrentImg" src="" alt="Current profile picture" />
+          </button>
+        </div>
+        <p class="meta" style="margin:14px 0 8px;">Uploads</p>
+        <div id="avatarModalUploads" class="avatar-modal-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="friendsModal" class="modal hidden" hidden>
+    <div class="modal-card card" style="width:min(760px,94vw);">
+      <div class="modal-head">
+        <h3>Friends</h3>
+        <button id="closeFriendsModalBtn" type="button" class="ghost-btn">Close</button>
+      </div>
+      <div id="friendsModalList" class="friends-modal-list"></div>
+    </div>
+  </div>
+
+  <div class="bg-gradient"></div>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <main class="container">
+    <section id="authSection" class="auth-shell">
+      <div class="auth-split">
+        <section class="auth-left" aria-label="Welcome">
+          <div class="auth-left-top">
+            <img class="auth-brand" src="logo.svg" alt="RecipeTube" />
+          </div>
+
+          <h1 class="auth-hero">
+            See everyday meals from<br />
+            your <span class="auth-gradient">close friends</span>.
+          </h1>
+          <p class="auth-hero-sub meta">
+            Share your cooking process, discover meals you'll actually make.
+          </p>
+
+          <div class="auth-promo">
+            <div class="promo-stack">
+              <div class="promo-card promo-card-a">
+                <div class="promo-chip">Recipe</div>
+                <div class="promo-line"></div>
+                <div class="promo-line short"></div>
+                <div class="promo-icons">
+                  <span class="promo-dot"></span>
+                  <span class="promo-dot"></span>
+                  <span class="promo-dot"></span>
+                </div>
+              </div>
+              <div class="promo-card promo-card-b">
+                <div class="promo-chip">Process</div>
+                <div class="promo-grid">
+                  <div class="promo-tile"></div>
+                  <div class="promo-tile"></div>
+                  <div class="promo-tile"></div>
+                  <div class="promo-tile"></div>
+                </div>
+              </div>
+              <div class="promo-card promo-card-c">
+                <div class="promo-chip">Friends</div>
+                <div class="promo-avatars">
+                  <div class="promo-avatar"></div>
+                  <div class="promo-avatar"></div>
+                  <div class="promo-avatar"></div>
+                  <div class="promo-avatar"></div>
+                </div>
+                <div class="promo-line"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="auth-divider" aria-hidden="true"></div>
+
+        <section class="auth-right" aria-label="Login">
+          <div class="auth-card2">
+            <h2 class="auth-card-title">Log in to RecipeTube</h2>
+
+            <details class="auth-advanced" open>
+              <summary>Server</summary>
+              <p id="serverMessage" class="message">Connecting to server...</p>
+              <div class="server-row">
+                <input id="apiBaseInput" type="url" placeholder="Server URL (example: http://localhost:3000)" />
+                <button id="saveApiBaseBtn" type="button">Connect</button>
+              </div>
+            </details>
+
+            <div class="tabs auth-tabs">
+              <button class="tab-btn active" data-tab="signup" type="button">Create account</button>
+              <button class="tab-btn" data-tab="login" type="button">Log in</button>
+            </div>
+
+            <form id="signupForm" class="auth-form">
+              <input type="email" id="signupEmail" placeholder="Email address" required />
+              <input type="password" id="signupPassword" placeholder="Password" minlength="6" required />
+              <button type="submit" class="auth-primary">Create account</button>
+            </form>
+
+            <form id="loginForm" class="auth-form hidden">
+              <input type="email" id="loginEmail" placeholder="Email address" required />
+              <input type="password" id="loginPassword" placeholder="Password" required />
+              <button type="submit" class="auth-primary">Log in</button>
+            </form>
+
+            <p id="authMessage" class="message"></p>
+
+            <div class="auth-download">
+              <a
+                id="downloadDesktopLink"
+                class="auth-secondary"
+                href="http://dkr20302-droid.github.io/recipetube-downloads/"
+                target="_blank"
+                rel="noopener"
+              >Download the desktop app</a>
+              <div class="meta auth-download-sub">Windows and macOS installers.</div>
+            </div>
+
+            <div class="auth-footer meta">
+              <span>About</span>
+              <span>Help</span>
+              <span>Privacy</span>
+              <span>Terms</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="appSection" class="hidden" hidden>
+      <div class="fb-shell">
+        <header class="fb-topbar">
+          <div class="fb-top-left">
+            <img class="fb-brand" src="logo.svg" alt="RecipeTube" />
+            <div class="fb-search">
+              <input type="search" id="searchInput" placeholder="Search RecipeTube" />
+            </div>
+          </div>
+
+          <nav class="fb-top-nav" aria-label="Main">
+            <button type="button" class="fb-top-item fb-nav-item active" data-page="home" title="Home" aria-label="Home">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v10h-5v-6H11v6H6V11H3l9-8z"/></svg>
+            </button>
+            <button type="button" class="fb-top-item fb-nav-item" data-page="explore" title="Explore" aria-label="Explore">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 1 5.293-14.293A8 8 0 0 1 10 18zm11 3l-6-6 1.414-1.414 6 6L21 21z"/></svg>
+            </button>
+            <button type="button" class="fb-top-item fb-nav-item" data-page="reels" title="Reels" aria-label="Reels">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm6 4v6l6-3-6-3z"/></svg>
+            </button>
+            <button type="button" id="notificationsBtn" class="fb-top-item fb-nav-item" data-page="notifications" title="Notifications" aria-label="Notifications">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm6-6V11a6 6 0 1 0-12 0v5L4 18v1h16v-1l-2-2z"/></svg>
+              <span id="notifBadge" class="notif-dot hidden" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fb-top-item fb-nav-item" data-page="map" title="Map" aria-label="Map">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg>
+            </button>
+          </nav>
+
+          <div class="fb-top-right">
+            <button id="openComposerBtn" type="button" class="fb-circle" title="Post" aria-label="Post">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 11V4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>
+            </button>
+            <button type="button" class="fb-circle fb-nav-item" data-page="profile" title="Profile" aria-label="Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.97 0-9 2.239-9 5v1h18v-1c0-2.761-4.03-5-9-5z"/></svg>
+            </button>
+            <button id="logoutBtn" type="button" class="fb-circle" title="Logout" aria-label="Logout">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-7 7 7 7zm-6 4h6v-2H4V5h6V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <button id="floatingChatBtn" type="button" class="floating-chat" title="Messages" aria-label="Messages">
+          <span class="floating-chat-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.4-4.2A8 8 0 0 1 3 12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="floating-chat-text">Messages</span>
+        </button>
+
+        <div class="profile-menu-wrap">
+          <button id="profileMenuBtn" type="button" class="profile-menu-btn" title="Account" aria-label="Account menu">
+            <img id="profileMenuAvatar" class="profile-menu-avatar" src="" alt="" />
+            <span class="profile-menu-caret" aria-hidden="true">▾</span>
+          </button>
+
+          <div id="profileMenu" class="profile-menu hidden" hidden>
+            <div class="profile-menu-head">
+              <div class="avatar" style="width:44px;height:44px;">
+                <span class="avatar-letter show">C</span>
+                <img id="profileMenuHeadAvatar" class="avatar-img" src="" alt="Profile picture" />
+              </div>
+              <div class="profile-menu-head-lines">
+                <div id="profileMenuName" class="profile-menu-name">Chef</div>
+                <div id="profileMenuEmail" class="meta profile-menu-email">Not signed in</div>
+              </div>
+            </div>
+
+            <div class="profile-menu-divider"></div>
+            <button type="button" class="profile-menu-action" data-action="menuProfiles">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M22 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </span>
+              <span>See all profiles</span>
+            </button>
+
+            <div class="profile-menu-divider"></div>
+
+            <button type="button" class="profile-menu-action" data-action="menuSettings">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0-3.5-3.5 3.5 3.5 0 0 0 3.5 3.5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.5-2-3.5-2.4.5a7.7 7.7 0 0 0-1.7-1L15 4h-6l-.4 3.5a7.7 7.7 0 0 0-1.7 1L4.5 8 2.5 11.5 4.5 13a7.9 7.9 0 0 0 .1 1 7.9 7.9 0 0 0-.1 1l-2 1.5 2 3.5 2.4-.5a7.7 7.7 0 0 0 1.7 1L9 20h6l.4-3.5a7.7 7.7 0 0 0 1.7-1l2.4.5 2-3.5-2-1.5a7.9 7.9 0 0 0-.1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              </span>
+              <span>Settings &amp; privacy</span>
+              <span class="pm-chevron" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="profile-menu-action" data-action="menuHelp">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.09 9a3 3 0 0 1 5.82 1c0 2-3 2-3 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              </span>
+              <span>Help &amp; support</span>
+              <span class="pm-chevron" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="profile-menu-action" data-action="menuDisplay">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M21 12.3A8.4 8.4 0 0 1 11.7 3a6.9 6.9 0 1 0 9.3 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              </span>
+              <span>Display &amp; accessibility</span>
+              <span class="pm-chevron" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="profile-menu-action" data-action="menuFeedback">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 9v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10.3 3h3.4l8.3 15.2A2 2 0 0 1 20.3 21H3.7a2 2 0 0 1-1.7-2.8L10.3 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              </span>
+              <span>Give feedback</span>
+              <span class="meta" style="margin-left:auto;">CTRL B</span>
+            </button>
+
+            <div class="profile-menu-divider"></div>
+            <button type="button" class="profile-menu-action" data-action="menuLogout">
+              <span class="pm-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-7 7 7 7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 21h6v-2H4V5h6V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              </span>
+              <span>Log out</span>
+            </button>
+
+            <div class="profile-menu-footer meta">Privacy · Terms · Advertising · Cookies</div>
+          </div>
+        </div>
+
+        <main class="fb-layout">
+	          <aside class="fb-left ig-rail" aria-label="Sidebar">
+              <button type="button" class="ig-brand fb-nav-item" data-page="home" title="RecipeTube" aria-label="RecipeTube">
+                <img src="logo.svg" alt="" />
+              </button>
+
+	            <div class="ig-rail-me" title="Profile">
+	              <div class="avatar small"><span class="avatar-letter show">C</span></div>
+	              <div class="visually-hidden">
+	                <div class="fb-me-name" id="welcomeText"></div>
+	                <div class="meta" id="welcomeSubText">RecipeTube</div>
+	              </div>
+	            </div>
+
+              <nav class="ig-rail-nav" aria-label="Primary navigation">
+                <button type="button" class="fb-side-item fb-nav-item active" data-page="home" title="Home" aria-label="Home">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v10h-5v-6H11v6H6V11H3l9-8z"/></svg>
+                  <span class="label">Home</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="explore" title="Explore" aria-label="Explore">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 1 0 4.49 12.37l4.07 4.07 1.41-1.41-4.07-4.07A7 7 0 0 0 10 3zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></svg>
+                  <span class="label">Explore</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="reels" title="Reels" aria-label="Reels">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6zm3-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H7zm3 5l7 4-7 4v-8z"/></svg>
+                  <span class="label">Reels</span>
+                </button>
+                <button id="openComposerBtnRail" type="button" class="fb-side-item" title="Create" aria-label="Create">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 11V4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>
+                  <span class="label">Create</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="notifications" title="Notifications" aria-label="Notifications">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm6-6V11a6 6 0 1 0-12 0v5L4 18v1h16v-1l-2-2z"/></svg>
+                  <span class="label">Notifications</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="chat" title="Messages" aria-label="Messages">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.4-4.2A8 8 0 0 1 3 12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                  <span class="label">Messages</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="bookmarks" title="Saved" aria-label="Saved">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1.5 1.5 0 0 1 1.5 1.5V22l-7.5-4-7.5 4V4.5A1.5 1.5 0 0 1 6 3z"/></svg>
+                  <span class="label">Saved</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="follow" title="Following" aria-label="Following">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm-9 9v-1c0-3.31 4.03-6 9-6 1.19 0 2.33.15 3.38.42A6.5 6.5 0 0 0 13 20v1H3zm15-9h2V8h-2V6h-2v2h-2v2h2v2h2z"/></svg>
+                  <span class="label">Following</span>
+                </button>
+                <button type="button" class="fb-side-item fb-nav-item" data-page="map" title="Map" aria-label="Map">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg>
+                  <span class="label">Map</span>
+                </button>
+              </nav>
+
+              <div class="ig-rail-bottom">
+                <button type="button" class="fb-side-item fb-nav-item" data-page="profile" title="Profile" aria-label="Profile">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.97 0-9 2.239-9 5v1h18v-1c0-2.761-4.03-5-9-5z"/></svg>
+                  <span class="label">Profile</span>
+                </button>
+                <button type="button" class="fb-side-item" id="logoutBtnRail" title="Logout" aria-label="Logout">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-7 7 7 7zm-6 4h6v-2H4V5h6V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z"/></svg>
+                  <span class="label">Logout</span>
+                </button>
+              </div>
+          </aside>
+
+          <section class="fb-center">
+            <div class="fb-center-head">
+              <h2 id="pageTitle">Home</h2>
+            </div>
+
+            <section id="pageHome" class="page-view">
+              <section class="fb-card ig-stories-card">
+                <div id="storiesRow" class="ig-stories" aria-label="Stories"></div>
+              </section>
+              <section class="fb-card feed-card">
+                <div id="feed" class="feed"></div>
+              </section>
+            </section>
+
+          <section id="pageExplore" class="page-view hidden" hidden>
+            <section class="fb-card feed-card"><div id="exploreFeed" class="feed"></div></section>
+          </section>
+
+          <section id="pageNotifications" class="page-view hidden" hidden>
+            <section class="fb-card">
+              <div class="notif-actions">
+                <button id="markNotifsReadBtn" type="button" class="ghost-btn">Mark all read</button>
+              </div>
+              <div id="notificationsList" class="notifications-list">
+                <p class="meta">No notifications yet.</p>
+              </div>
+            </section>
+          </section>
+
+          <section id="pageFollow" class="page-view hidden" hidden>
+            <section class="fb-card" style="margin-bottom:12px;">
+              <div class="fb-panel-title">Friends</div>
+              <p id="friendsStatus" class="meta" style="margin:6px 0 10px;">Friends are people who follow you back.</p>
+              <div id="friendsList" class="friends-list"></div>
+            </section>
+            <section class="fb-card feed-card"><div id="followFeed" class="feed"></div></section>
+          </section>
+
+          <section id="pageBookmarks" class="page-view hidden" hidden>
+            <section class="fb-card feed-card"><div id="bookmarksFeed" class="feed"></div></section>
+          </section>
+
+          <section id="pageReels" class="page-view hidden" hidden>
+            <section class="fb-card feed-card">
+              <div id="reelsFeed" class="feed"></div>
+            </section>
+            <div class="reels-nav" aria-hidden="true">
+              <button id="reelsPrevBtn" type="button" class="reels-nav-btn" title="Previous reel" aria-label="Previous reel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8l-6 6h12l-6-6z" fill="currentColor" transform="rotate(180 12 12)"/></svg>
+              </button>
+              <button id="reelsNextBtn" type="button" class="reels-nav-btn" title="Next reel" aria-label="Next reel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8l-6 6h12l-6-6z" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <section id="pageChat" class="page-view hidden" hidden>
+            <section class="fb-card">
+              <div class="chat-grid">
+                <aside class="chat-left" aria-label="Conversations">
+                  <div class="chat-left-head">
+                    <h3 style="margin:0;">Chat</h3>
+                    <p class="meta" style="margin:4px 0 0;">Direct messages</p>
+                  </div>
+
+                  <div class="chat-start">
+                    <input id="newChatEmail" type="text" placeholder="Message someone (email)" />
+                    <button id="startChatBtn" type="button" class="ghost-btn">Start</button>
+                  </div>
+                  <p id="chatStatus" class="meta" style="margin:8px 0 0;"></p>
+
+                  <div id="chatList" class="chat-list"></div>
+                </aside>
+
+                <section class="chat-main" aria-label="Messages">
+                  <div class="chat-main-head">
+                    <div>
+                      <div id="chatTitle" class="chat-title">Select a chat</div>
+                      <div id="chatSubTitle" class="meta">Your messages are stored on the server.</div>
+                    </div>
+                  </div>
+
+                  <div id="chatMessages" class="chat-messages"></div>
+
+                  <div class="chat-compose">
+                    <button id="chatAttachBtn" type="button" class="ghost-btn" title="Attach image/GIF" aria-label="Attach image/GIF">+</button>
+                    <input id="chatAttachInput" type="file" accept="image/*" hidden />
+                    <input id="chatComposeInput" type="text" placeholder="Write a message..." maxlength="1000" />
+                    <button id="sendChatBtn" type="button" class="btn">Send</button>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+
+          <section id="pageGrok" class="page-view hidden" hidden>
+            <section class="card">
+              <h3>Grok</h3>
+              <p class="meta">Assistant tools page placeholder.</p>
+            </section>
+          </section>
+
+          <section id="pageCreatorStudio" class="page-view hidden" hidden>
+            <section class="card">
+              <h3>Creator Studio</h3>
+              <p class="meta">Creator analytics and controls page placeholder.</p>
+            </section>
+          </section>
+
+          <section id="pagePremium" class="page-view hidden" hidden>
+            <section class="card">
+              <h3>Premium</h3>
+              <p class="meta">Premium plan and perks page placeholder.</p>
+            </section>
+          </section>
+
+          <section id="pageMap" class="page-view hidden" hidden>
+            <section class="fb-card map-fullscreen-card">
+              <p class="meta">Free OpenStreetMap mode. Click anywhere to discover a dish.</p>
+              <div id="worldMap" class="world-map world-map-full"></div>
+              <p id="mapDishTitle" class="meta">Click a location on the map</p>
+              <p id="mapDishDesc" class="meta"></p>
+              <p id="mapStatus" class="meta"></p>
+            </section>
+          </section>
+
+          <section id="pageProfile" class="page-view hidden" hidden>
+            <section class="fb-card profile-shell">
+              <div class="profile-cover">
+                <img id="profileCoverImg" class="profile-cover-img" src="" alt="Cover photo" />
+                <button id="editCoverBtn" type="button" class="profile-cover-btn">Add cover photo</button>
+              </div>
+
+              <div class="profile-header">
+                <div class="profile-avatar-wrap">
+                  <img id="profileAvatar" class="profile-avatar big" src="" alt="Profile picture" />
+                  <button id="changeAvatarBtn" type="button" class="profile-avatar-btn" title="Change profile picture" aria-label="Change profile picture">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4V7zm8 10a4 4 0 1 0-4-4 4 4 0 0 0 4 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                  </button>
+                </div>
+
+                <div class="profile-header-lines">
+                  <h2 id="profileUsername" class="profile-name">Chef</h2>
+                  <button id="profileFriendsBtn" type="button" class="profile-friends meta">0 friends</button>
+                  <div id="profileEmail" class="meta">Not signed in</div>
+                </div>
+
+                <div class="profile-header-actions">
+                  <button id="addStoryBtn" type="button" class="btn">+ Add to story</button>
+                  <button id="profileFollowBtn" type="button" class="follow-btn hidden" hidden>Follow</button>
+                  <button id="profileMessageBtn" type="button" class="ghost-btn hidden" hidden>Message</button>
+                  <button id="profileReportBtn" type="button" class="ghost-btn hidden" hidden>Report</button>
+                  <button id="profileBlockBtn" type="button" class="ghost-btn hidden" hidden>Block</button>
+                  <button id="editProfileBtn" type="button" class="ghost-btn">Edit profile</button>
+                </div>
+              </div>
+
+              <div class="profile-stats">
+                <button id="profilePostsBtn" type="button" class="profile-stat"><strong id="profilePosts">0</strong><span>Posts</span></button>
+                <button id="profileFollowersBtn" type="button" class="profile-stat"><strong id="profileFollowers">0</strong><span>Followers</span></button>
+                <button id="profileFollowingBtn" type="button" class="profile-stat"><strong id="profileFollowing">0</strong><span>Following</span></button>
+              </div>
+
+              <div class="profile-views">
+                <button id="viewProfileBtn" type="button" class="ghost-btn active">Posts</button>
+                <button id="viewLikedBtn" type="button" class="ghost-btn">Liked</button>
+                <button id="viewSavedBtn" type="button" class="ghost-btn">Saved</button>
+              </div>
+              <div id="profileFeed" class="feed"></div>
+
+              <form id="profileForm" class="profile-form hidden" hidden>
+                <input type="text" id="editUsername" placeholder="Edit username" minlength="2" maxlength="32" required />
+                <input type="file" id="editProfilePic" accept="image/*" />
+                <button id="saveProfileBtn" type="submit" class="ghost-btn">Save Profile</button>
+              </form>
+              <p id="profileMessage" class="message"></p>
+            </section>
+            <p id="serverStatusText" class="meta"></p>
+          </section>
+
+          <section id="pageMore" class="page-view hidden" hidden>
+            <section class="fb-card">
+              <div style="padding:14px 14px 10px;">
+                <h3 style="margin:0;">Settings</h3>
+                <p class="meta" style="margin:6px 0 0;">Privacy, notifications, account controls.</p>
+              </div>
+
+              <div class="settings-grid">
+                <section class="settings-card">
+                  <h4 style="margin:0 0 8px;">Privacy</h4>
+                  <div class="settings-row">
+                    <label class="meta" style="font-weight:900;">Blocked users</label>
+                    <button id="refreshBlockedBtn" type="button" class="ghost-btn small-btn" title="Refresh" aria-label="Refresh">⟳</button>
+                  </div>
+                  <div id="blockedUsersList" class="settings-list"></div>
+                </section>
+
+                <section class="settings-card">
+                  <h4 style="margin:0 0 8px;">Notifications</h4>
+                  <label class="settings-toggle">
+                    <input id="notifNewPostToggle" type="checkbox" checked />
+                    <span>New posts from following</span>
+                  </label>
+                  <label class="settings-toggle">
+                    <input id="notifMessagesToggle" type="checkbox" checked />
+                    <span>Messages</span>
+                  </label>
+                  <p class="meta" style="margin:10px 0 0;">(Stored on this device for now.)</p>
+                </section>
+
+                <section class="settings-card">
+                  <h4 style="margin:0 0 8px;">Account</h4>
+                  <div class="settings-row">
+                    <button id="exportDataBtn" type="button" class="ghost-btn">Export my data (JSON)</button>
+                    <button id="logoutEverywhereBtn" type="button" class="ghost-btn">Logout everywhere</button>
+                  </div>
+                  <div class="settings-row">
+                    <button id="changePasswordBtn" type="button" class="ghost-btn">Change password</button>
+                    <span class="meta">Requires your current password</span>
+                  </div>
+                  <p id="settingsMessage" class="meta" style="margin:10px 0 0;"></p>
+                </section>
+
+                <section id="reportsCard" class="settings-card hidden" hidden>
+                  <div class="settings-row">
+                    <h4 style="margin:0;">Reports</h4>
+                    <button id="refreshReportsBtn" type="button" class="ghost-btn small-btn" title="Refresh" aria-label="Refresh">⟳</button>
+                  </div>
+                  <div id="reportsList" class="settings-list"></div>
+                </section>
+              </div>
+            </section>
+          </section>
+          </section>
+
+          <aside class="fb-right" aria-label="Right rail">
+            <section class="fb-panel ig-right-me">
+              <div class="ig-right-me-row">
+                <div class="avatar" style="width:44px;height:44px;">
+                  <span class="avatar-letter show">C</span>
+                  <img id="rightMeAvatar" class="avatar-img" src="" alt="Profile picture" />
+                </div>
+                <div class="ig-right-me-lines">
+                  <div id="rightMeName" class="ig-right-me-name">Chef</div>
+                  <div id="rightMeSub" class="meta">Not signed in</div>
+                </div>
+                <button id="rightMeSwitch" type="button" class="ig-link">Switch</button>
+              </div>
+            </section>
+            <section class="fb-panel">
+              <div class="fb-panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <span>Suggested for you</span>
+                <button id="seeAllSuggestedBtn" type="button" class="ig-link">See all</button>
+              </div>
+              <button id="refreshSuggestedBtn" type="button" class="ghost-btn small-btn" title="Refresh" aria-label="Refresh" style="margin:0 6px 10px;">Refresh</button>
+              <div id="suggestedUsers" class="suggested-list"></div>
+              <div class="ig-footer meta">About · Help · Privacy · Terms</div>
+            </section>
+          </aside>
+        </main>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS6Yw2tc3Y+4V1YxDCEV4VpWw2X2gYdEx+kt1lQGjlGII4XESyqCCpt5TRTF+t0NenE2no0RvrKeGaUyQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
